@@ -32,6 +32,7 @@ If your shell has `NODE_ENV=production` or your npm config omits dev dependencie
 npm run dev -- scan --min-edge=2
 # or after build
 node dist/cli.js scan --min-edge=2
+# defaults to XMD quote pairs. override with --quote=XMD,XPR if needed.
 ```
 
 JSON output:
@@ -92,11 +93,11 @@ Every quote is tagged before route scoring:
 Default scans require `indicative` or better:
 
 ```bash
-node dist/cli.js scan --min-edge=2 --min-confidence=indicative
+node dist/cli.js scan --min-edge=2 --quote=XMD --min-confidence=indicative
 ```
 
 For stricter testing:
 
 ```bash
-node dist/cli.js scan --min-edge=2 --min-confidence=executable
+node dist/cli.js scan --min-edge=2 --quote=XMD --min-confidence=executable
 ```

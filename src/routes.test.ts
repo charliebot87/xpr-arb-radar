@@ -49,3 +49,12 @@ test('filters opportunities below requested confidence tier', () => {
   const executableB = { ...q('alcor', 0.13, 0.14), confidence: 'executable' as const, source: 'orderbook' as const };
   assert.equal(findOpportunities([executableA, executableB], 1, 'executable').length, 1);
 });
+
+test('xmd pair fixture still detects indicative route math', () => {
+  const xmd = { symbol: 'XMD', contract: 'xmd.token', precision: 6 };
+  const a = { ...q('simpledex', 0.0026, 0.0027), quote: xmd };
+  const b = { ...q('alcor', 0.0030, 0.0031), quote: xmd };
+  const opps = findOpportunities([a, b], 5, 'indicative');
+  assert.equal(opps.length, 1);
+  assert.equal(opps[0].quote.symbol, 'XMD');
+});
