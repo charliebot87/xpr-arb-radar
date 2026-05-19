@@ -3,7 +3,7 @@ import type { MarketQuote, TokenRef } from '../types.js';
 
 const API = process.env.SIMPLEDEX_API ?? 'https://indexer.protonnz.com/api';
 
-type SimplePool = {
+export type SimplePool = {
   poolId: number;
   tokenA: { symbol: string; symbolFull?: string; contract: string };
   tokenB: { symbol: string; symbolFull?: string; contract: string };
@@ -16,19 +16,19 @@ type SimplePool = {
 
 type PoolResponse = SimplePool[] | { data?: SimplePool[]; pools?: SimplePool[] };
 
-function precision(symbolFull?: string): number | undefined {
+export function simpleDexPrecision(symbolFull?: string): number | undefined {
   const p = symbolFull?.split(',')[0];
   const n = p ? Number(p) : undefined;
   return Number.isFinite(n) ? n : undefined;
 }
 
-function token(t: SimplePool['tokenA']): TokenRef {
-  return { symbol: t.symbol, contract: t.contract, precision: precision(t.symbolFull) };
+export function simpleDexToken(t: SimplePool['tokenA']): TokenRef {
+  return { symbol: t.symbol, contract: t.contract, precision: simpleDexPrecision(t.symbolFull) };
 }
 
-function reserves(pool: SimplePool): { a: number; b: number } | undefined {
-  const pa = precision(pool.tokenA.symbolFull) ?? 4;
-  const pb = precision(pool.tokenB.symbolFull) ?? 4;
+export function simpleDexReserves(pool: SimplePool): { a: number; b: number } | undefined {
+  const pa = simpleDexPrecision(pool.tokenA.symbolFull) ?? 4;
+  const pb = simpleDexPrecision(pool.tokenB.symbolFull) ?? 4;
   const a = Number(pool.reserveA) / 10 ** pa;
   const b = Number(pool.reserveB) / 10 ** pb;
   if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return undefined;
@@ -36,11 +36,10 @@ function reserves(pool: SimplePool): { a: number; b: number } | undefined {
 }
 
 export async function getSimpleDexQuotes(): Promise<MarketQuote[]> {
-  const res = await fetchJson<PoolResponse>(`${API}/pools`);
-  const pools = Array.isArray(res) ? res : res.data ?? res.pools ?? [];
+  const pools = await getSimpleDexPools();
   const quotes: MarketQuote[] = [];
-  for (const p of pools.filter((p) => !p.paused)) {
-    const r = reserves(p);
+  for (const p of pools) {
+    const r = simpleDexReserves(p);
     if (!r) continue;
     const feeBps = p.feeRate ?? 30;
     const feeMultiplier = 1 - feeBps / 10_000;
@@ -49,8 +48,8 @@ export async function getSimpleDexQuotes(): Promise<MarketQuote[]> {
     quotes.push({
       venue: 'simpledex',
       pairId: String(p.poolId),
-      base: token(p.tokenA),
-      quote: token(p.tokenB),
+      base: simpleDexToken(p.tokenA),
+      quote: simpleDexToken(p.tokenB),
       bid: midAinB * feeMultiplier,
       ask: midAinB / feeMultiplier,
       mid: midAinB,
@@ -64,8 +63,8 @@ export async function getSimpleDexQuotes(): Promise<MarketQuote[]> {
     quotes.push({
       venue: 'simpledex',
       pairId: `${p.poolId}:inverted`,
-      base: token(p.tokenB),
-      quote: token(p.tokenA),
+      base: simpleDexToken(p.tokenB),
+      quote: simpleDexToken(p.tokenA),
       bid: midBinA * feeMultiplier,
       ask: midBinA / feeMultiplier,
       mid: midBinA,
@@ -78,4 +77,10 @@ export async function getSimpleDexQuotes(): Promise<MarketQuote[]> {
     });
   }
   return quotes;
+}
+
+export async function getSimpleDexPools(): Promise<SimplePool[]> {
+  const res = await fetchJson<PoolResponse>(`${API}/pools`);
+  const pools = Array.isArray(res) ? res : res.data ?? res.pools ?? [];
+  return pools.filter((p) => !p.paused);
 }

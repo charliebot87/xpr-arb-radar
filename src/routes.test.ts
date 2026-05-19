@@ -126,8 +126,29 @@ test('method evaluator returns named strategy signals', async () => {
 });
 
 import { formatVenueFailure } from './failures.js';
+import { findSimpleDexCyclesFromPools } from './simpledex-cycles.js';
+import type { SimplePool } from './venues/simpledex.js';
 
 test('formats venue failures with source attribution', () => {
   assert.equal(formatVenueFailure('metalx', new DOMException('This operation was aborted', 'AbortError')), 'metalx: AbortError: This operation was aborted');
   assert.equal(formatVenueFailure('alcor', 'rate limited'), 'alcor: rate limited');
+});
+
+test('simpledex cycle scanner simulates exact multi-pool xpr loops', () => {
+  const pool = (poolId: number, a: string, b: string, reserveA: number, reserveB: number): SimplePool => ({
+    poolId,
+    tokenA: { symbol: a, symbolFull: `4,${a}`, contract: a === 'XPR' ? 'eosio.token' : 'simpletoken' },
+    tokenB: { symbol: b, symbolFull: `4,${b}`, contract: b === 'XPR' ? 'eosio.token' : 'simpletoken' },
+    reserveA: reserveA * 10_000,
+    reserveB: reserveB * 10_000,
+    feeRate: 30,
+  });
+  const candidates = findSimpleDexCyclesFromPools([
+    pool(1, 'XPR', 'AAA', 100, 10_000),
+    pool(2, 'AAA', 'BBB', 10_000, 10_000),
+    pool(3, 'BBB', 'XPR', 10_000, 110),
+  ], { notionals: [1], minProfitPct: 1, maxHops: 3 });
+  assert.ok(candidates.length > 0);
+  assert.match(candidates[0].route, /XPR->AAA->BBB->XPR/);
+  assert.ok(candidates[0].profitPct > 1);
 });

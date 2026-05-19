@@ -10,6 +10,7 @@ import { pairKey } from './normalize.js';
 import type { MarketQuote, QuoteConfidence } from './types.js';
 import type { ScoreAgent } from './scoreboard.js';
 import { formatVenueFailure } from './failures.js';
+import { findSimpleDexCycles } from './simpledex-cycles.js';
 
 interface VenueTask {
   venue: string;
@@ -22,11 +23,41 @@ function arg(name: string, fallback?: string): string | undefined {
   return found ? found.slice(prefix.length) : fallback;
 }
 
+function numberListArg(name: string, fallback: number[]): number[] {
+  const value = arg(name);
+  if (!value) return fallback;
+  const parsed = value.split(',').map((v) => Number(v.trim())).filter((v) => Number.isFinite(v) && v > 0);
+  return parsed.length ? parsed : fallback;
+}
+
 async function main() {
   const command = process.argv[2] ?? 'scan';
-  if (command !== 'scan' && command !== 'paper' && command !== 'methods') {
-    console.error('usage: xpr-arb-radar scan|paper|methods [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--no-persist] [--json]');
+  if (command !== 'scan' && command !== 'paper' && command !== 'methods' && command !== 'simpledex-cycles') {
+    console.error('usage: xpr-arb-radar scan|paper|methods|simpledex-cycles [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--notionals=0.01,0.1,1] [--max-hops=4] [--start-symbol=XPR] [--start-contract=eosio.token] [--no-persist] [--json]');
     process.exit(1);
+  }
+
+  if (command === 'simpledex-cycles') {
+    const minEdge = Number(arg('min-edge', process.env.MIN_EDGE_PCT ?? '0'));
+    const candidates = await findSimpleDexCycles({
+      startSymbol: arg('start-symbol', 'XPR'),
+      startContract: arg('start-contract', 'eosio.token'),
+      notionals: numberListArg('notionals', [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 25]),
+      maxHops: Number(arg('max-hops', '4')) || 4,
+      minProfitPct: Number.isFinite(minEdge) ? minEdge : 0,
+      limit: Number(arg('limit', '20')) || 20,
+    });
+    if (process.argv.includes('--json')) {
+      console.log(JSON.stringify({ scannedAt: new Date().toISOString(), command, candidates }, null, 2));
+      return;
+    }
+    console.log(`xpr-arb-radar simpledex exact cycle scan | candidates: ${candidates.length}`);
+    for (const c of candidates) {
+      console.log(`\n${c.route}`);
+      console.log(`  notional ${c.notional} ${c.start.symbol} -> ${c.finalAmount.toFixed(8)} ${c.start.symbol} | profit ${c.profit.toFixed(8)} (${c.profitPct.toFixed(4)}%)`);
+      console.log(`  ${c.memoRoute}`);
+    }
+    return;
   }
 
   const minEdge = Number(arg('min-edge', process.env.MIN_EDGE_PCT ?? '1'));
