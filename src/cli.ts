@@ -30,6 +30,22 @@ function numberListArg(name: string, fallback: number[]): number[] {
   return parsed.length ? parsed : fallback;
 }
 
+function coverageStatus(enabled: Set<string>, failures: string[]): 'complete' | 'degraded' {
+  if (!failures.length) return 'complete';
+  for (const venue of enabled) {
+    if (failures.some((failure) => failure.startsWith(`${venue}:`))) return 'degraded';
+  }
+  return 'complete';
+}
+
+function failureCounts(failures: string[]): Record<string, number> {
+  return failures.reduce<Record<string, number>>((acc, failure) => {
+    const venue = failure.split(':', 1)[0] || 'unknown';
+    acc[venue] = (acc[venue] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
 async function main() {
   const command = process.argv[2] ?? 'scan';
   if (command !== 'scan' && command !== 'paper' && command !== 'methods' && command !== 'simpledex-cycles') {
@@ -73,6 +89,8 @@ async function main() {
   const allQuotes = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   const quotes = allQuotes.filter((q) => quoteSymbols.has(q.quote.symbol.toUpperCase()));
   const failures = settled.flatMap((r, idx) => (r.status === 'rejected' ? [formatVenueFailure(tasks[idx]?.venue ?? 'unknown', r.reason)] : []));
+  const coverage = coverageStatus(enabled, failures);
+  const failureCountByVenue = failureCounts(failures);
   const minNetEdge = Number.isFinite(minEdge) ? minEdge : 1;
   const opportunities = findOpportunities(quotes, minNetEdge, minConfidence);
   const observations = buildRouteObservations(quotes, opportunities, minNetEdge);
@@ -91,13 +109,13 @@ async function main() {
   const methodSignals = command === 'methods' ? await evaluateTradingMethods(observations, Number(arg('notional', process.env.PAPER_NOTIONAL ?? '10')) || 10) : undefined;
 
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), command, quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, persisted: !process.argv.includes('--no-persist'), observationCount: observations.length, failures, opportunities, paper: paperResult, methods: methodSignals }, null, 2));
+    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), command, quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, persisted: !process.argv.includes('--no-persist'), observationCount: observations.length, coverage, failureCountByVenue, failures, opportunities, paper: paperResult, methods: methodSignals }, null, 2));
     return;
   }
 
   console.log(`xpr-arb-radar ${command === 'paper' ? 'paper trader' : 'watch-only scan'}`);
   const confidenceCounts = quotes.reduce<Record<string, number>>((acc, q) => { acc[q.confidence] = (acc[q.confidence] ?? 0) + 1; return acc; }, {});
-  console.log(`quotes: ${quotes.length}/${allQuotes.length} | observations: ${observations.length} | quote filter: ${[...quoteSymbols].join(',')} | confidence: ${JSON.stringify(confidenceCounts)} | opportunities >= ${minEdge}% net (${minConfidence}+): ${opportunities.length}`);
+  console.log(`quotes: ${quotes.length}/${allQuotes.length} | observations: ${observations.length} | quote filter: ${[...quoteSymbols].join(',')} | coverage: ${coverage} | confidence: ${JSON.stringify(confidenceCounts)} | opportunities >= ${minEdge}% net (${minConfidence}+): ${opportunities.length}`);
   if (!process.argv.includes('--no-persist')) console.log(`persisted observations: ${statePath}`);
   if (methodSignals) {
     console.log('method signals:');
@@ -112,7 +130,7 @@ async function main() {
       console.log('paper trade scored: none; no positive candidate after friction');
     }
   }
-  if (failures.length) console.log(`failures: ${failures.join(' | ')}`);
+  if (failures.length) console.log(`failures: ${JSON.stringify(failureCountByVenue)} | ${failures.join(' | ')}`);
   for (const o of opportunities.slice(0, 20)) {
     console.log(`\n${pairKey(o.base, o.quote)}`);
     console.log(`  buy  ${o.buyVenue.venue.padEnd(9)} @ ${o.buyPrice}`);

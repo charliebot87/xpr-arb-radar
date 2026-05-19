@@ -128,10 +128,12 @@ test('method evaluator returns named strategy signals', async () => {
 import { formatVenueFailure } from './failures.js';
 import { findSimpleDexCyclesFromPools } from './simpledex-cycles.js';
 import type { SimplePool } from './venues/simpledex.js';
+import { FetchJsonError } from './http.js';
 
 test('formats venue failures with source attribution', () => {
   assert.equal(formatVenueFailure('metalx', new DOMException('This operation was aborted', 'AbortError')), 'metalx: AbortError: This operation was aborted');
   assert.equal(formatVenueFailure('alcor', 'rate limited'), 'alcor: rate limited');
+  assert.equal(formatVenueFailure('simpledex', new FetchJsonError('TypeError: fetch failed after 3 attempts for https://indexer.protonnz.com/api/pools', 'https://indexer.protonnz.com/api/pools', 3)), 'simpledex: FetchJsonError: TypeError: fetch failed after 3 attempts for https://indexer.protonnz.com/api/pools');
 });
 
 test('simpledex cycle scanner simulates exact multi-pool xpr loops', () => {

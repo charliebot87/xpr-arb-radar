@@ -1,7 +1,11 @@
 import { fetchJson } from '../http.js';
 import type { MarketQuote, TokenRef } from '../types.js';
 
-const API = process.env.SIMPLEDEX_API ?? 'https://indexer.protonnz.com/api';
+const API_ENDPOINTS = (process.env.SIMPLEDEX_API_ENDPOINTS ?? process.env.SIMPLEDEX_API ?? 'https://simpledex.fun/api,https://indexer.protonnz.com/api')
+  .split(',')
+  .map((v) => v.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+const RPC = process.env.XPR_RPC ?? 'https://api.protonnz.com';
 
 export type SimplePool = {
   poolId: number;
@@ -15,6 +19,18 @@ export type SimplePool = {
 };
 
 type PoolResponse = SimplePool[] | { data?: SimplePool[]; pools?: SimplePool[] };
+type ChainPool = {
+  id: number;
+  tokenAContract: string;
+  tokenASymbol: string;
+  tokenBContract: string;
+  tokenBSymbol: string;
+  reserveA: string | number;
+  reserveB: string | number;
+  feeRate?: number;
+  paused?: number | boolean;
+};
+type ChainRowsResponse = { rows?: ChainPool[]; more?: boolean; next_key?: string };
 
 export function simpleDexPrecision(symbolFull?: string): number | undefined {
   const p = symbolFull?.split(',')[0];
@@ -80,7 +96,55 @@ export async function getSimpleDexQuotes(): Promise<MarketQuote[]> {
 }
 
 export async function getSimpleDexPools(): Promise<SimplePool[]> {
-  const res = await fetchJson<PoolResponse>(`${API}/pools`);
-  const pools = Array.isArray(res) ? res : res.data ?? res.pools ?? [];
-  return pools.filter((p) => !p.paused);
+  const errors: string[] = [];
+  for (const api of API_ENDPOINTS) {
+    try {
+      const res = await fetchJson<PoolResponse>(`${api}/pools`, { timeoutMs: 15_000, retries: 2, retryDelayMs: 500 });
+      const pools = Array.isArray(res) ? res : res.data ?? res.pools ?? [];
+      return pools.filter((p) => !p.paused);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  try {
+    return await getSimpleDexPoolsFromRpc();
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : String(err));
+  }
+  throw new Error(`all SimpleDEX pool endpoints failed: ${errors.join(' | ')}`);
+}
+
+function symbolFromFull(symbolFull: string): string {
+  return symbolFull.split(',')[1] ?? symbolFull;
+}
+
+function chainPoolToSimplePool(row: ChainPool): SimplePool {
+  return {
+    poolId: row.id,
+    tokenA: { symbol: symbolFromFull(row.tokenASymbol), symbolFull: row.tokenASymbol, contract: row.tokenAContract },
+    tokenB: { symbol: symbolFromFull(row.tokenBSymbol), symbolFull: row.tokenBSymbol, contract: row.tokenBContract },
+    reserveA: row.reserveA,
+    reserveB: row.reserveB,
+    feeRate: row.feeRate,
+    paused: Boolean(row.paused),
+  };
+}
+
+async function getSimpleDexPoolsFromRpc(): Promise<SimplePool[]> {
+  const rows: ChainPool[] = [];
+  let lower_bound: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const res = await fetchJson<ChainRowsResponse>(`${RPC}/v1/chain/get_table_rows`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: 'simpledex', scope: 'simpledex', table: 'pools', json: true, limit: 200, lower_bound }),
+      timeoutMs: 15_000,
+      retries: 2,
+      retryDelayMs: 500,
+    });
+    rows.push(...(res.rows ?? []));
+    if (!res.more || !res.next_key) break;
+    lower_bound = res.next_key;
+  }
+  return rows.map(chainPoolToSimplePool).filter((p) => !p.paused);
 }

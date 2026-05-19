@@ -28,8 +28,8 @@ function parseId(id: string): TokenRef {
 
 export async function getAlcorQuotes(): Promise<MarketQuote[]> {
   const [tickers, pairs] = await Promise.all([
-    fetchJson<AlcorTicker[]>(`${API}/tickers`),
-    fetchJson<AlcorPairs>(`${API}/pairs`).catch(() => [] as AlcorPairs),
+    fetchJson<AlcorTicker[]>(`${API}/tickers`, { timeoutMs: 15_000, retries: 2, retryDelayMs: 500 }),
+    fetchJson<AlcorPairs>(`${API}/pairs`, { timeoutMs: 10_000, retries: 1, retryDelayMs: 500 }).catch(() => [] as AlcorPairs),
   ]);
   const pairInfo = new Map(pairs.map((p) => [p.ticker_id, p]));
   const quotes: MarketQuote[] = [];
