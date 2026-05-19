@@ -1,0 +1,30 @@
+{
+  "name": "xpr-arb-radar",
+  "version": "0.1.0",
+  "description": "Watch-only arbitrage scanner for XPR Network venues: Metal X, SimpleDEX, and Alcor.",
+  "type": "module",
+  "bin": {
+    "xpr-arb-radar": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js scan",
+    "dev": "tsx src/cli.ts scan",
+    "test": "npm run build && node --test dist/**/*.test.js"
+  },
+  "keywords": [
+    "xpr-network",
+    "metalx",
+    "simpledex",
+    "alcor",
+    "arbitrage",
+    "scanner"
+  ],
+  "author": "charliebot87",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
