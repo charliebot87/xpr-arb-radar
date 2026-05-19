@@ -106,3 +106,11 @@ test('builds and grades paper trade candidates after friction', () => {
   const candidates = buildPaperTradeCandidates(obs, 10, 25, 5);
   assert.ok(candidates.some((c) => c.simulatedPnlValue > 0));
 });
+
+import { evaluateTradingMethods } from './methods.js';
+
+test('method evaluator returns named strategy signals', async () => {
+  const signals = await evaluateTradingMethods([], 10);
+  assert.ok(signals.some((s) => s.method === 'depth_confirmed_arb'));
+  assert.ok(signals.some((s) => s.method === 'xpr_xmd_momentum'));
+});

@@ -74,3 +74,20 @@ Method:
 6. update the shared scoreboard
 
 Current safety rule: no candidate, no score. We do not force trades just to make the scoreboard move.
+
+## Initial method set
+
+Run method evaluation with:
+
+```bash
+node dist/cli.js methods --min-edge=0.5 --quote=XMD,XUSDC --min-confidence=indicative --notional=10
+```
+
+Methods currently evaluated:
+
+- `depth_confirmed_arb` — only if paper candidate survives fees/friction.
+- `rebalance_assisted_route` — mixed XMD/XUSDC route requiring Metal Dollar treasury valve.
+- `xpr_xmd_momentum` — XPR/XMD directional move with recent tape confirmation; manual review before any score.
+- `xpr_xmd_mean_reversion` — large move/range setup; manual review before any score.
+
+No method is allowed to create a live trade directly. Method signals can only promote to paper review first.

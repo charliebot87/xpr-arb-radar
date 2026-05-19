@@ -5,6 +5,7 @@ import { getSimpleDexQuotes } from './venues/simpledex.js';
 import { findOpportunities } from './routes.js';
 import { appendObservations, buildRouteObservations } from './observations.js';
 import { scoreBestPaperCandidate } from './paper.js';
+import { evaluateTradingMethods } from './methods.js';
 import { pairKey } from './normalize.js';
 import type { MarketQuote, QuoteConfidence } from './types.js';
 import type { ScoreAgent } from './scoreboard.js';
@@ -17,8 +18,8 @@ function arg(name: string, fallback?: string): string | undefined {
 
 async function main() {
   const command = process.argv[2] ?? 'scan';
-  if (command !== 'scan' && command !== 'paper') {
-    console.error('usage: xpr-arb-radar scan|paper [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--no-persist] [--json]');
+  if (command !== 'scan' && command !== 'paper' && command !== 'methods') {
+    console.error('usage: xpr-arb-radar scan|paper|methods [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--no-persist] [--json]');
     process.exit(1);
   }
 
@@ -50,8 +51,10 @@ async function main() {
       })
     : undefined;
 
+  const methodSignals = command === 'methods' ? await evaluateTradingMethods(observations, Number(arg('notional', process.env.PAPER_NOTIONAL ?? '10')) || 10) : undefined;
+
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), command, quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, persisted: !process.argv.includes('--no-persist'), observationCount: observations.length, failures, opportunities, paper: paperResult }, null, 2));
+    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), command, quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, persisted: !process.argv.includes('--no-persist'), observationCount: observations.length, failures, opportunities, paper: paperResult, methods: methodSignals }, null, 2));
     return;
   }
 
@@ -59,6 +62,10 @@ async function main() {
   const confidenceCounts = quotes.reduce<Record<string, number>>((acc, q) => { acc[q.confidence] = (acc[q.confidence] ?? 0) + 1; return acc; }, {});
   console.log(`quotes: ${quotes.length}/${allQuotes.length} | observations: ${observations.length} | quote filter: ${[...quoteSymbols].join(',')} | confidence: ${JSON.stringify(confidenceCounts)} | opportunities >= ${minEdge}% net (${minConfidence}+): ${opportunities.length}`);
   if (!process.argv.includes('--no-persist')) console.log(`persisted observations: ${statePath}`);
+  if (methodSignals) {
+    console.log('method signals:');
+    for (const m of methodSignals) console.log(`  ${m.method}: ${m.actionability} — ${m.reason}`);
+  }
   if (paperResult) {
     console.log(`paper candidates: ${paperResult.candidates.length}`);
     if (paperResult.scored) {

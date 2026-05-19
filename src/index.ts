@@ -7,3 +7,4 @@ export * from './venues/alcor.js';
 export * from './observations.js';
 export * from './scoreboard.js';
 export * from './paper.js';
+export * from './methods.js';
