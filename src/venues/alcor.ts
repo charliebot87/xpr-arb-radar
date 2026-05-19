@@ -55,6 +55,7 @@ export async function getAlcorQuotes(): Promise<MarketQuote[]> {
       maxBaseSize: toNumber(t.base_amm_liquidity),
       maxQuoteSize: toNumber(t.target_amm_liquidity),
       source: bid && ask ? 'ticker' : 'synthetic',
+      confidence: bid && ask ? 'indicative' : 'synthetic',
       updatedAt: new Date().toISOString(),
       raw: t,
     });

@@ -77,6 +77,7 @@ export async function getMetalXQuotes(): Promise<MarketQuote[]> {
       mid,
       feeBps: (m.taker_fee ?? m.maker_fee ?? 0) * 100,
       source: bid || ask ? 'orderbook' : 'ticker',
+      confidence: bid && ask ? 'executable' : mid ? 'stale' : 'synthetic',
       updatedAt: new Date().toISOString(),
       raw: m,
     });

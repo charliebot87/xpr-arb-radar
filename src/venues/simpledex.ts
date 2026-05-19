@@ -57,6 +57,7 @@ export async function getSimpleDexQuotes(): Promise<MarketQuote[]> {
       feeBps,
       maxQuoteSize: p.depth5pct?.tokenB,
       source: 'amm',
+      confidence: 'indicative',
       updatedAt: new Date().toISOString(),
       raw: p,
     });
@@ -71,6 +72,7 @@ export async function getSimpleDexQuotes(): Promise<MarketQuote[]> {
       feeBps,
       maxQuoteSize: p.depth5pct?.tokenA,
       source: 'amm',
+      confidence: 'indicative',
       updatedAt: new Date().toISOString(),
       raw: p,
     });

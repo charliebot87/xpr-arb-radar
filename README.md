@@ -79,3 +79,24 @@ proton action dex placeorder '{"market_id":1,"account":"charliebot", ...}' charl
 ```
 
 The key stays in the local Proton CLI keychain. The Node process never sees a private key.
+
+## Confidence tiers
+
+Every quote is tagged before route scoring:
+
+- `executable` — real top-of-book / executable quote shape is understood.
+- `indicative` — useful radar signal, but not enough depth/size proof for autonomous execution.
+- `stale` — context only, usually ticker/open/close data without executable bid/ask.
+- `synthetic` — derived/fallback data; never trade from this directly.
+
+Default scans require `indicative` or better:
+
+```bash
+node dist/cli.js scan --min-edge=2 --min-confidence=indicative
+```
+
+For stricter testing:
+
+```bash
+node dist/cli.js scan --min-edge=2 --min-confidence=executable
+```

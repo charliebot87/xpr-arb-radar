@@ -9,7 +9,7 @@ const base = { symbol: 'XPR', contract: 'eosio.token', precision: 4 };
 const quote = { symbol: 'XUSDT', contract: 'xtokens', precision: 6 };
 
 function q(venue: MarketQuote['venue'], bid: number, ask: number, feeBps = 0): MarketQuote {
-  return { venue, pairId: venue, base, quote, bid, ask, feeBps, source: 'ticker', updatedAt: new Date(0).toISOString() };
+  return { venue, pairId: venue, base, quote, bid, ask, feeBps, source: 'ticker', confidence: 'indicative', updatedAt: new Date(0).toISOString() };
 }
 
 test('finds net-positive cross venue opportunity', () => {
@@ -40,4 +40,12 @@ test('parses EOSIO asset strings', () => {
 test('does not treat Metal X aggregate depth buckets as executable prices', () => {
   assert.equal(priceFromDepthLevel({ count: 2, level: 1000000, bid: 100508.2739, ask: 90005.082739 }), undefined);
   assert.equal(priceFromDepthLevel({ price: 0.0027 }), 0.0027);
+});
+
+test('filters opportunities below requested confidence tier', () => {
+  const indicative = [q('metalx', 0.10, 0.11), q('alcor', 0.13, 0.14)];
+  assert.equal(findOpportunities(indicative, 1, 'executable').length, 0);
+  const executableA = { ...q('metalx', 0.10, 0.11), confidence: 'executable' as const, source: 'orderbook' as const };
+  const executableB = { ...q('alcor', 0.13, 0.14), confidence: 'executable' as const, source: 'orderbook' as const };
+  assert.equal(findOpportunities([executableA, executableB], 1, 'executable').length, 1);
 });

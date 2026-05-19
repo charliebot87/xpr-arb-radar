@@ -1,4 +1,5 @@
 export type VenueName = 'metalx' | 'simpledex' | 'alcor';
+export type QuoteConfidence = 'executable' | 'indicative' | 'stale' | 'synthetic';
 
 export interface TokenRef {
   symbol: string;
@@ -18,6 +19,7 @@ export interface MarketQuote {
   maxBaseSize?: number;
   maxQuoteSize?: number;
   source: 'orderbook' | 'amm' | 'ticker' | 'synthetic';
+  confidence: QuoteConfidence;
   updatedAt: string;
   raw?: unknown;
 }
@@ -31,6 +33,7 @@ export interface Opportunity {
   sellPrice: number;
   grossEdgePct: number;
   netEdgePct: number;
+  confidence: QuoteConfidence;
   notes: string[];
 }
 
