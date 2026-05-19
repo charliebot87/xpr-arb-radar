@@ -9,6 +9,12 @@ import { evaluateTradingMethods } from './methods.js';
 import { pairKey } from './normalize.js';
 import type { MarketQuote, QuoteConfidence } from './types.js';
 import type { ScoreAgent } from './scoreboard.js';
+import { formatVenueFailure } from './failures.js';
+
+interface VenueTask {
+  venue: string;
+  run: Promise<MarketQuote[]>;
+}
 
 function arg(name: string, fallback?: string): string | undefined {
   const prefix = `--${name}=`;
@@ -27,15 +33,15 @@ async function main() {
   const minConfidence = (arg('min-confidence', process.env.MIN_CONFIDENCE ?? 'indicative') ?? 'indicative') as QuoteConfidence;
   const quoteSymbols = new Set((arg('quote', process.env.QUOTE_SYMBOLS ?? 'XMD,XUSDC') ?? 'XMD').split(',').map((v) => v.trim().toUpperCase()).filter(Boolean));
   const enabled = new Set((arg('venues', process.env.VENUES ?? 'metalx,simpledex,alcor') ?? '').split(',').map((v) => v.trim()));
-  const tasks: Promise<MarketQuote[]>[] = [];
-  if (enabled.has('metalx')) tasks.push(getMetalXQuotes());
-  if (enabled.has('simpledex')) tasks.push(getSimpleDexQuotes());
-  if (enabled.has('alcor')) tasks.push(getAlcorQuotes());
+  const tasks: VenueTask[] = [];
+  if (enabled.has('metalx')) tasks.push({ venue: 'metalx', run: getMetalXQuotes() });
+  if (enabled.has('simpledex')) tasks.push({ venue: 'simpledex', run: getSimpleDexQuotes() });
+  if (enabled.has('alcor')) tasks.push({ venue: 'alcor', run: getAlcorQuotes() });
 
-  const settled = await Promise.allSettled(tasks);
+  const settled = await Promise.allSettled(tasks.map((t) => t.run));
   const allQuotes = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   const quotes = allQuotes.filter((q) => quoteSymbols.has(q.quote.symbol.toUpperCase()));
-  const failures = settled.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map((r) => String(r.reason));
+  const failures = settled.flatMap((r, idx) => (r.status === 'rejected' ? [formatVenueFailure(tasks[idx]?.venue ?? 'unknown', r.reason)] : []));
   const minNetEdge = Number.isFinite(minEdge) ? minEdge : 1;
   const opportunities = findOpportunities(quotes, minNetEdge, minConfidence);
   const observations = buildRouteObservations(quotes, opportunities, minNetEdge);

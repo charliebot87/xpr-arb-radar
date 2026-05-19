@@ -124,3 +124,10 @@ test('method evaluator returns named strategy signals', async () => {
   assert.ok(signals.some((s) => s.method === 'depth_confirmed_arb'));
   assert.ok(signals.some((s) => s.method === 'xpr_xmd_momentum'));
 });
+
+import { formatVenueFailure } from './failures.js';
+
+test('formats venue failures with source attribution', () => {
+  assert.equal(formatVenueFailure('metalx', new DOMException('This operation was aborted', 'AbortError')), 'metalx: AbortError: This operation was aborted');
+  assert.equal(formatVenueFailure('alcor', 'rate limited'), 'alcor: rate limited');
+});
