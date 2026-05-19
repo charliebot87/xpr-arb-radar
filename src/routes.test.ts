@@ -89,3 +89,12 @@ test('builds Metal Dollar mint/redeem proton CLI commands without key material',
     'charliebot',
   ]);
 });
+
+import { buildRouteObservations } from './observations.js';
+
+test('persists route observations with operator actionability', () => {
+  const observations = buildRouteObservations([q('metalx', 0.10, 0.11), q('alcor', 0.105, 0.12)], [], 1);
+  assert.ok(observations.length > 0);
+  assert.ok(observations.every((o) => o.observed_at && o.route_key && o.operator_actionability));
+  assert.ok(observations.some((o) => o.rejection_reason === 'net edge below threshold after fees'));
+});

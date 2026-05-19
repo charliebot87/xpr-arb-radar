@@ -120,3 +120,18 @@ proton action xmd.token transfer '{"from":"charliebot","to":"xmd.treasury","quan
 ```
 
 The scanner only builds command drafts for this. It does not execute them.
+
+
+## Durable observations
+
+By default, `scan` appends route observations to `state/observations.jsonl`.
+
+Each JSONL row records timestamp, route, venues, confidence, rejection reason, failure type, treasury-valve requirement, and `operator_actionability`.
+
+```bash
+node dist/cli.js scan --min-edge=2
+node dist/cli.js scan --min-edge=2 --state=state/observations.jsonl
+node dist/cli.js scan --min-edge=2 --no-persist
+```
+
+This makes the scanner say: what was observed, how it was classified, why it was rejected, and whether it deserves escalation.

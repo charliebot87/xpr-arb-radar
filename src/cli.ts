@@ -3,6 +3,7 @@ import { getAlcorQuotes } from './venues/alcor.js';
 import { getMetalXQuotes } from './venues/metalx.js';
 import { getSimpleDexQuotes } from './venues/simpledex.js';
 import { findOpportunities } from './routes.js';
+import { appendObservations, buildRouteObservations } from './observations.js';
 import { pairKey } from './normalize.js';
 import type { MarketQuote, QuoteConfidence } from './types.js';
 
@@ -15,7 +16,7 @@ function arg(name: string, fallback?: string): string | undefined {
 async function main() {
   const command = process.argv[2] ?? 'scan';
   if (command !== 'scan') {
-    console.error('usage: xpr-arb-radar scan [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--json]');
+    console.error('usage: xpr-arb-radar scan [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--no-persist] [--json]');
     process.exit(1);
   }
 
@@ -32,16 +33,21 @@ async function main() {
   const allQuotes = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   const quotes = allQuotes.filter((q) => quoteSymbols.has(q.quote.symbol.toUpperCase()));
   const failures = settled.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map((r) => String(r.reason));
-  const opportunities = findOpportunities(quotes, Number.isFinite(minEdge) ? minEdge : 1, minConfidence);
+  const minNetEdge = Number.isFinite(minEdge) ? minEdge : 1;
+  const opportunities = findOpportunities(quotes, minNetEdge, minConfidence);
+  const observations = buildRouteObservations(quotes, opportunities, minNetEdge);
+  const statePath = arg('state', process.env.OBSERVATIONS_PATH ?? 'state/observations.jsonl') ?? 'state/observations.jsonl';
+  if (!process.argv.includes('--no-persist')) await appendObservations(statePath, observations);
 
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, failures, opportunities }, null, 2));
+    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, persisted: !process.argv.includes('--no-persist'), observationCount: observations.length, failures, opportunities }, null, 2));
     return;
   }
 
   console.log(`xpr-arb-radar watch-only scan`);
   const confidenceCounts = quotes.reduce<Record<string, number>>((acc, q) => { acc[q.confidence] = (acc[q.confidence] ?? 0) + 1; return acc; }, {});
-  console.log(`quotes: ${quotes.length}/${allQuotes.length} | quote filter: ${[...quoteSymbols].join(',')} | confidence: ${JSON.stringify(confidenceCounts)} | opportunities >= ${minEdge}% net (${minConfidence}+): ${opportunities.length}`);
+  console.log(`quotes: ${quotes.length}/${allQuotes.length} | observations: ${observations.length} | quote filter: ${[...quoteSymbols].join(',')} | confidence: ${JSON.stringify(confidenceCounts)} | opportunities >= ${minEdge}% net (${minConfidence}+): ${opportunities.length}`);
+  if (!process.argv.includes('--no-persist')) console.log(`persisted observations: ${statePath}`);
   if (failures.length) console.log(`failures: ${failures.join(' | ')}`);
   for (const o of opportunities.slice(0, 20)) {
     console.log(`\n${pairKey(o.base, o.quote)}`);
