@@ -55,3 +55,22 @@ When the first `profit` result is recorded, announce it in MY AGENTS with:
 - evidence id / tx id
 
 No private keys. No live trading until paper results justify escalation.
+
+## Paper-trader method
+
+Run a paper grading pass with:
+
+```bash
+node dist/cli.js paper --min-edge=0.5 --quote=XMD,XUSDC --min-confidence=indicative --notional=10
+```
+
+Method:
+
+1. run the scanner
+2. persist observations unless `--no-persist` is supplied
+3. build paper candidates from `manual_review` or `paper_route_candidate` observations
+4. subtract slippage and treasury-valve friction
+5. only score a trade if simulated PnL is positive after friction
+6. update the shared scoreboard
+
+Current safety rule: no candidate, no score. We do not force trades just to make the scoreboard move.

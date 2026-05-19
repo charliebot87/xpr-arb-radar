@@ -4,8 +4,10 @@ import { getMetalXQuotes } from './venues/metalx.js';
 import { getSimpleDexQuotes } from './venues/simpledex.js';
 import { findOpportunities } from './routes.js';
 import { appendObservations, buildRouteObservations } from './observations.js';
+import { scoreBestPaperCandidate } from './paper.js';
 import { pairKey } from './normalize.js';
 import type { MarketQuote, QuoteConfidence } from './types.js';
+import type { ScoreAgent } from './scoreboard.js';
 
 function arg(name: string, fallback?: string): string | undefined {
   const prefix = `--${name}=`;
@@ -15,8 +17,8 @@ function arg(name: string, fallback?: string): string | undefined {
 
 async function main() {
   const command = process.argv[2] ?? 'scan';
-  if (command !== 'scan') {
-    console.error('usage: xpr-arb-radar scan [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--no-persist] [--json]');
+  if (command !== 'scan' && command !== 'paper') {
+    console.error('usage: xpr-arb-radar scan|paper [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--no-persist] [--json]');
     process.exit(1);
   }
 
@@ -39,15 +41,33 @@ async function main() {
   const statePath = arg('state', process.env.OBSERVATIONS_PATH ?? 'state/observations.jsonl') ?? 'state/observations.jsonl';
   if (!process.argv.includes('--no-persist')) await appendObservations(statePath, observations);
 
+  const paperResult = command === 'paper'
+    ? await scoreBestPaperCandidate({
+        observations,
+        scoreboardPath: arg('scoreboard', process.env.SCOREBOARD_PATH ?? '/Users/charliebot/clawd/state/mragentsmith-strategy-score.json') ?? '/Users/charliebot/clawd/state/mragentsmith-strategy-score.json',
+        agent: (arg('agent', process.env.SCORE_AGENT ?? 'charliebot') ?? 'charliebot') as ScoreAgent,
+        notionalValue: Number(arg('notional', process.env.PAPER_NOTIONAL ?? '10')) || 10,
+      })
+    : undefined;
+
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, persisted: !process.argv.includes('--no-persist'), observationCount: observations.length, failures, opportunities }, null, 2));
+    console.log(JSON.stringify({ scannedAt: new Date().toISOString(), command, quoteSymbols: [...quoteSymbols], quoteCount: quotes.length, totalQuoteCount: allQuotes.length, minConfidence, persisted: !process.argv.includes('--no-persist'), observationCount: observations.length, failures, opportunities, paper: paperResult }, null, 2));
     return;
   }
 
-  console.log(`xpr-arb-radar watch-only scan`);
+  console.log(`xpr-arb-radar ${command === 'paper' ? 'paper trader' : 'watch-only scan'}`);
   const confidenceCounts = quotes.reduce<Record<string, number>>((acc, q) => { acc[q.confidence] = (acc[q.confidence] ?? 0) + 1; return acc; }, {});
   console.log(`quotes: ${quotes.length}/${allQuotes.length} | observations: ${observations.length} | quote filter: ${[...quoteSymbols].join(',')} | confidence: ${JSON.stringify(confidenceCounts)} | opportunities >= ${minEdge}% net (${minConfidence}+): ${opportunities.length}`);
   if (!process.argv.includes('--no-persist')) console.log(`persisted observations: ${statePath}`);
+  if (paperResult) {
+    console.log(`paper candidates: ${paperResult.candidates.length}`);
+    if (paperResult.scored) {
+      console.log(`paper trade scored: ${paperResult.scored.recorded.outcome} ${paperResult.scored.recorded.pointsDelta > 0 ? '+' : ''}${paperResult.scored.recorded.pointsDelta} | pnl ${paperResult.scored.recorded.pnlValue.toFixed(6)} (${paperResult.scored.recorded.pnlPct.toFixed(4)}%)`);
+      if (paperResult.scored.firstProfit) console.log('FIRST PROFITABLE PAPER TRADE DETECTED');
+    } else {
+      console.log('paper trade scored: none; no positive candidate after friction');
+    }
+  }
   if (failures.length) console.log(`failures: ${failures.join(' | ')}`);
   for (const o of opportunities.slice(0, 20)) {
     console.log(`\n${pairKey(o.base, o.quote)}`);

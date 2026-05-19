@@ -98,3 +98,11 @@ test('persists route observations with operator actionability', () => {
   assert.ok(observations.every((o) => o.observed_at && o.route_key && o.operator_actionability));
   assert.ok(observations.some((o) => o.rejection_reason === 'net edge below threshold after fees'));
 });
+
+import { buildPaperTradeCandidates } from './paper.js';
+
+test('builds and grades paper trade candidates after friction', () => {
+  const obs = buildRouteObservations([q('metalx', 0.10, 0.11), q('alcor', 0.13, 0.14)], findOpportunities([q('metalx', 0.10, 0.11), q('alcor', 0.13, 0.14)], 1), 1);
+  const candidates = buildPaperTradeCandidates(obs, 10, 25, 5);
+  assert.ok(candidates.some((c) => c.simulatedPnlValue > 0));
+});
