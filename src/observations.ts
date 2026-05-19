@@ -16,6 +16,9 @@ export interface RouteObservation {
   sell_venue: string;
   buy_pair_id: string;
   sell_pair_id: string;
+  buy_max_quote_size?: number;
+  sell_max_quote_size?: number;
+  max_quote_size?: number;
   gross_edge_pct?: number;
   net_edge_pct?: number;
   confidence: QuoteConfidence;
@@ -38,6 +41,11 @@ function quoteBucket(token: TokenRef): string {
 function ageMs(q: MarketQuote, now: number): number | undefined {
   const t = Date.parse(q.updatedAt);
   return Number.isFinite(t) ? Math.max(0, now - t) : undefined;
+}
+
+function routeMaxQuoteSize(buy: MarketQuote, sell: MarketQuote): number | undefined {
+  const values = [buy.maxQuoteSize, sell.maxQuoteSize].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  return values.length ? Math.min(...values) : undefined;
 }
 
 function classify(
@@ -103,6 +111,9 @@ export function buildRouteObservations(quotes: MarketQuote[], opportunities: Opp
           sell_venue: sell.venue,
           buy_pair_id: buy.pairId,
           sell_pair_id: sell.pairId,
+          buy_max_quote_size: buy.maxQuoteSize,
+          sell_max_quote_size: sell.maxQuoteSize,
+          max_quote_size: routeMaxQuoteSize(buy, sell),
           gross_edge_pct: grossEdgePct,
           net_edge_pct: netEdgePct,
           confidence,

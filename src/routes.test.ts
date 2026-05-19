@@ -107,6 +107,16 @@ test('builds and grades paper trade candidates after friction', () => {
   assert.ok(candidates.some((c) => c.simulatedPnlValue > 0));
 });
 
+test('paper candidates reject notional above either leg quote capacity', () => {
+  const buy = { ...q('simpledex', 0.10, 0.11), maxQuoteSize: 0.01 };
+  const sell = { ...q('alcor', 0.13, 0.14), maxQuoteSize: 5 };
+  const obs = buildRouteObservations([buy, sell], findOpportunities([buy, sell], 1), 1);
+  const candidates = buildPaperTradeCandidates(obs, 10, 25, 5);
+  const route = candidates.find((c) => c.observation.buy_pair_id === 'simpledex' && c.observation.sell_pair_id === 'alcor');
+  assert.equal(route?.observation.max_quote_size, 0.01);
+  assert.match(route?.rejectionReason ?? '', /notional 10 exceeds usable quote capacity/);
+});
+
 import { evaluateTradingMethods } from './methods.js';
 
 test('method evaluator returns named strategy signals', async () => {
