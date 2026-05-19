@@ -12,6 +12,26 @@ export function quotePairKey(q: MarketQuote): string {
   return pairKey(q.base, q.quote);
 }
 
+export function valueTokenKey(token: TokenRef): string {
+  const symbol = token.symbol.toUpperCase();
+  if ((symbol === 'XMD' && token.contract === 'xmd.token') || (symbol === 'XUSDC' && token.contract === 'xtokens')) {
+    return 'USD_EQ@xpr-stable-equivalent';
+  }
+  return tokenKey(token);
+}
+
+export function valuePairKey(base: TokenRef, quote: TokenRef): string {
+  return `${tokenKey(base)}/${valueTokenKey(quote)}`;
+}
+
+export function quoteValuePairKey(q: MarketQuote): string {
+  return valuePairKey(q.base, q.quote);
+}
+
+export function sameValueToken(a: TokenRef, b: TokenRef): boolean {
+  return valueTokenKey(a) === valueTokenKey(b);
+}
+
 export function invertQuote(q: MarketQuote): MarketQuote | undefined {
   if (!q.bid && !q.ask && !q.mid) return undefined;
   const bid = q.ask && q.ask > 0 ? 1 / q.ask : undefined;

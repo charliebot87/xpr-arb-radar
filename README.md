@@ -32,7 +32,7 @@ If your shell has `NODE_ENV=production` or your npm config omits dev dependencie
 npm run dev -- scan --min-edge=2
 # or after build
 node dist/cli.js scan --min-edge=2
-# defaults to XMD quote pairs. override with --quote=XMD,XPR if needed.
+# defaults to XMD and XUSDC as stable-equivalent quote pairs. override with --quote=XMD if needed.
 ```
 
 JSON output:
@@ -93,11 +93,13 @@ Every quote is tagged before route scoring:
 Default scans require `indicative` or better:
 
 ```bash
-node dist/cli.js scan --min-edge=2 --quote=XMD --min-confidence=indicative
+node dist/cli.js scan --min-edge=2 --quote=XMD,XUSDC --min-confidence=indicative
 ```
 
 For stricter testing:
 
 ```bash
-node dist/cli.js scan --min-edge=2 --quote=XMD --min-confidence=executable
+node dist/cli.js scan --min-edge=2 --quote=XMD,XUSDC --min-confidence=executable
 ```
+
+Stable quote handling: `XMD@xmd.token` and `XUSDC@xtokens` are treated as value-equivalent for route comparison, but mixed-quote routes are annotated so execution can rebalance intentionally.

@@ -1,5 +1,5 @@
 import type { MarketQuote, Opportunity, QuoteConfidence } from './types.js';
-import { quotePairKey, tokenKey } from './normalize.js';
+import { quoteValuePairKey, sameValueToken, tokenKey } from './normalize.js';
 
 const CONFIDENCE_RANK: Record<QuoteConfidence, number> = { synthetic: 0, stale: 1, indicative: 2, executable: 3 };
 
@@ -13,7 +13,7 @@ export function findOpportunities(quotes: MarketQuote[], minNetEdgePct = 1, minC
   for (const q of quotes) {
     if (!q.ask || !q.bid) continue;
     if (CONFIDENCE_RANK[q.confidence] < minRank) continue;
-    const key = quotePairKey(q);
+    const key = quoteValuePairKey(q);
     const list = byPair.get(key) ?? [];
     list.push(q);
     byPair.set(key, list);
@@ -33,6 +33,7 @@ export function findOpportunities(quotes: MarketQuote[], minNetEdgePct = 1, minC
         if (netEdgePct < minNetEdgePct) continue;
         const notes: string[] = [];
         if (confidence !== 'executable') notes.push(`confidence=${confidence}`);
+        if (sameValueToken(buyVenue.quote, sellVenue.quote) && tokenKey(buyVenue.quote) !== tokenKey(sellVenue.quote)) notes.push(`${buyVenue.quote.symbol}/${sellVenue.quote.symbol} treated as stable-equivalent value`);
         if (buyVenue.source === 'ticker' || sellVenue.source === 'ticker') notes.push('ticker price, not full executable depth');
         if (!buyVenue.maxBaseSize || !sellVenue.maxBaseSize) notes.push('size/depth unknown');
         out.push({

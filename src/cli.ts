@@ -21,7 +21,7 @@ async function main() {
 
   const minEdge = Number(arg('min-edge', process.env.MIN_EDGE_PCT ?? '1'));
   const minConfidence = (arg('min-confidence', process.env.MIN_CONFIDENCE ?? 'indicative') ?? 'indicative') as QuoteConfidence;
-  const quoteSymbols = new Set((arg('quote', process.env.QUOTE_SYMBOLS ?? 'XMD') ?? 'XMD').split(',').map((v) => v.trim().toUpperCase()).filter(Boolean));
+  const quoteSymbols = new Set((arg('quote', process.env.QUOTE_SYMBOLS ?? 'XMD,XUSDC') ?? 'XMD').split(',').map((v) => v.trim().toUpperCase()).filter(Boolean));
   const enabled = new Set((arg('venues', process.env.VENUES ?? 'metalx,simpledex,alcor') ?? '').split(',').map((v) => v.trim()));
   const tasks: Promise<MarketQuote[]>[] = [];
   if (enabled.has('metalx')) tasks.push(getMetalXQuotes());

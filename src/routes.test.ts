@@ -58,3 +58,13 @@ test('xmd pair fixture still detects indicative route math', () => {
   assert.equal(opps.length, 1);
   assert.equal(opps[0].quote.symbol, 'XMD');
 });
+
+test('treats XMD and XUSDC as stable-equivalent quote value', () => {
+  const xmd = { symbol: 'XMD', contract: 'xmd.token', precision: 6 };
+  const xusdc = { symbol: 'XUSDC', contract: 'xtokens', precision: 6 };
+  const buy = { ...q('simpledex', 0.0026, 0.0027), quote: xusdc };
+  const sell = { ...q('alcor', 0.0030, 0.0031), quote: xmd };
+  const opps = findOpportunities([buy, sell], 5, 'indicative');
+  assert.equal(opps.length, 1);
+  assert.match(opps[0].notes.join(' '), /stable-equivalent/);
+});
