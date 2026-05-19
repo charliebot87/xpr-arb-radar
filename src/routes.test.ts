@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { findOpportunities } from './routes.js';
 import { invertQuote, parseAsset } from './normalize.js';
+import { priceFromDepthLevel } from './venues/metalx.js';
 import type { MarketQuote } from './types.js';
 
 const base = { symbol: 'XPR', contract: 'eosio.token', precision: 4 };
@@ -34,4 +35,9 @@ test('inverts quote safely', () => {
 
 test('parses EOSIO asset strings', () => {
   assert.deepEqual(parseAsset('123.4500 XPR'), { amount: 123.45, symbol: 'XPR', precision: 4 });
+});
+
+test('does not treat Metal X aggregate depth buckets as executable prices', () => {
+  assert.equal(priceFromDepthLevel({ count: 2, level: 1000000, bid: 100508.2739, ask: 90005.082739 }), undefined);
+  assert.equal(priceFromDepthLevel({ price: 0.0027 }), 0.0027);
 });

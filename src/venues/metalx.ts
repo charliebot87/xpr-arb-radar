@@ -26,16 +26,13 @@ function token(t: MetalXMarket['bid_token']): TokenRef {
   return { symbol: t.code, contract: t.contract, precision: t.precision };
 }
 
-function priceFromLevel(level: unknown): number | undefined {
+export function priceFromDepthLevel(level: unknown): number | undefined {
   if (Array.isArray(level)) return toNumber(level[0]);
   if (level && typeof level === 'object') {
     const o = level as Record<string, unknown>;
-    const direct = toNumber(o.price ?? o.rate ?? o[0]);
-    if (direct) return direct;
-    const bucket = toNumber(o.level);
-    // Metal X depth returns bucket levels. With step=0.000001, level 2744 means 0.002744.
-    // Level 0 is not executable price information; it only means below the selected bucket.
-    return bucket ? bucket * DEPTH_STEP : undefined;
+    // Only trust explicit price/rate fields. Metal X `level` buckets are aggregation buckets,
+    // not confirmed executable prices. Treating them as prices caused fantasy arb.
+    return toNumber(o.price ?? o.rate ?? o[0]);
   }
   return undefined;
 }
@@ -58,8 +55,8 @@ export async function getMetalXQuotes(): Promise<MarketQuote[]> {
     try {
       const depth = await fetchJson<MetalXDepthResponse>(`${API}/orders/depth?symbol=${encodeURIComponent(m.symbol)}&step=${DEPTH_STEP}`, 5_000);
       const data = (depth.data && typeof depth.data === 'object' ? depth.data : depth) as { bids?: unknown[]; asks?: unknown[] };
-      bid = data.bids?.map(priceFromLevel).find((v): v is number => Boolean(v));
-      ask = data.asks?.map(priceFromLevel).find((v): v is number => Boolean(v));
+      bid = data.bids?.map(priceFromDepthLevel).find((v): v is number => Boolean(v));
+      ask = data.asks?.map(priceFromDepthLevel).find((v): v is number => Boolean(v));
     } catch {
       // Depth endpoint shape occasionally changes; fallback below keeps scanner useful but marks source as ticker.
     }

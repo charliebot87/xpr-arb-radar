@@ -20,9 +20,11 @@ This is **not** a live trading bot yet. It is deliberately scanner-first because
 ## Install
 
 ```bash
-npm install
+npm install --include=dev
 npm run build
 ```
+
+If your shell has `NODE_ENV=production` or your npm config omits dev dependencies, plain `npm install` will not install `typescript`, so the build cannot run. Use `npm install --include=dev` or `npm ci --include=dev` for testing/building.
 
 ## Run
 
