@@ -103,3 +103,20 @@ node dist/cli.js scan --min-edge=2 --quote=XMD,XUSDC --min-confidence=executable
 ```
 
 Stable quote handling: `XMD@xmd.token` and `XUSDC@xtokens` are treated as value-equivalent for route comparison, but mixed-quote routes are annotated so execution can rebalance intentionally.
+
+
+## Metal Dollar mint/redeem planning
+
+When a route needs to move between XUSDC and XMD, use the Metal Dollar treasury contract rather than treating the spread as a normal venue trade.
+
+Observed on-chain pattern:
+
+```bash
+# Mint XMD from XUSDC
+proton action xtokens transfer '{"from":"charliebot","to":"xmd.treasury","quantity":"1.000000 XUSDC","memo":"mint"}' charliebot
+
+# Redeem XMD back to XUSDC
+proton action xmd.token transfer '{"from":"charliebot","to":"xmd.treasury","quantity":"1.000000 XMD","memo":"redeem,XUSDC"}' charliebot
+```
+
+The scanner only builds command drafts for this. It does not execute them.

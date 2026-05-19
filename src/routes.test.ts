@@ -68,3 +68,24 @@ test('treats XMD and XUSDC as stable-equivalent quote value', () => {
   assert.equal(opps.length, 1);
   assert.match(opps[0].notes.join(' '), /stable-equivalent/);
 });
+
+import { buildMintXmdCommand, buildRedeemXmdCommand } from './execution/metaldollar.js';
+
+test('builds Metal Dollar mint/redeem proton CLI commands without key material', () => {
+  assert.deepEqual(buildMintXmdCommand('charliebot', 1.23), [
+    'proton',
+    'action',
+    'xtokens',
+    'transfer',
+    JSON.stringify({ from: 'charliebot', to: 'xmd.treasury', quantity: '1.230000 XUSDC', memo: 'mint' }),
+    'charliebot',
+  ]);
+  assert.deepEqual(buildRedeemXmdCommand('charliebot', 2), [
+    'proton',
+    'action',
+    'xmd.token',
+    'transfer',
+    JSON.stringify({ from: 'charliebot', to: 'xmd.treasury', quantity: '2.000000 XMD', memo: 'redeem,XUSDC' }),
+    'charliebot',
+  ]);
+});
