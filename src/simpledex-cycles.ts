@@ -9,6 +9,12 @@ export interface SimpleDexHop {
   isTokenAIn: boolean;
   amountIn: number;
   amountOut: number;
+  amountInRaw: string;
+  amountOutRaw: string;
+  inputReserveRaw: string;
+  outputReserveRaw: string;
+  feeRate: number;
+  inputImpactPct: number;
 }
 
 export interface SimpleDexCycleCandidate {
@@ -43,11 +49,19 @@ export interface SimpleDexCycleOptions {
   notionals?: number[];
   maxHops?: number;
   minProfitPct?: number;
+  minNotional?: number;
+  minAbsoluteProfit?: number;
+  maxHopImpactPct?: number;
+  minHopOutputRaw?: bigint;
   limit?: number;
 }
 
 const DEFAULT_NOTIONALS = [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 25];
 const DEFAULT_START = { symbol: 'XPR', contract: 'eosio.token' };
+const DEFAULT_MIN_NOTIONAL = 1;
+const DEFAULT_MIN_ABSOLUTE_PROFIT = 0.1;
+const DEFAULT_MAX_HOP_IMPACT_PCT = 5;
+const DEFAULT_MIN_HOP_OUTPUT_RAW = 10n;
 
 function sameToken(a: TokenRef, b: TokenRef): boolean {
   return tokenKey(a) === tokenKey(b);
@@ -112,16 +126,32 @@ function buildEdges(pools: SimplePool[]): DirectedEdge[] {
   return edges;
 }
 
-function simulatePath(path: DirectedEdge[], notional: number, start: TokenRef): SimpleDexCycleCandidate | undefined {
+function simulatePath(path: DirectedEdge[], notional: number, start: TokenRef, options: Required<Pick<SimpleDexCycleOptions, 'maxHopImpactPct' | 'minHopOutputRaw'>>): SimpleDexCycleCandidate | undefined {
   let amount = notional;
   let amountRaw = humanToRaw(notional, path[0]?.inputPrecision ?? start.precision ?? 4);
   const hops: SimpleDexHop[] = [];
   for (const edge of path) {
     if (amountRaw > edge.inputReserveRaw / 2n) return undefined;
+    const inputImpactPct = (Number(amountRaw) / Number(edge.inputReserveRaw)) * 100;
+    if (!Number.isFinite(inputImpactPct) || inputImpactPct > options.maxHopImpactPct) return undefined;
     const amountOutRaw = simulateSimpleDexSwapRaw(edge, amountRaw);
     if (!amountOutRaw) return undefined;
+    if (amountOutRaw < options.minHopOutputRaw) return undefined;
     const amountOut = rawToHuman(amountOutRaw, edge.outputPrecision);
-    hops.push({ poolId: edge.pool.poolId, input: edge.input, output: edge.output, isTokenAIn: edge.isTokenAIn, amountIn: amount, amountOut });
+    hops.push({
+      poolId: edge.pool.poolId,
+      input: edge.input,
+      output: edge.output,
+      isTokenAIn: edge.isTokenAIn,
+      amountIn: amount,
+      amountOut,
+      amountInRaw: amountRaw.toString(),
+      amountOutRaw: amountOutRaw.toString(),
+      inputReserveRaw: edge.inputReserveRaw.toString(),
+      outputReserveRaw: edge.outputReserveRaw.toString(),
+      feeRate: edge.pool.feeRate ?? 30,
+      inputImpactPct,
+    });
     amount = amountOut;
     amountRaw = amountOutRaw;
   }
@@ -139,7 +169,7 @@ function simulatePath(path: DirectedEdge[], notional: number, start: TokenRef): 
     route: `${tokenRoute} via ${poolRoute}`,
     memoRoute: `pools=[${hops.map((h) => h.poolId).join(',')}] isTokenAIns=[${hops.map((h) => h.isTokenAIn).join(',')}]`,
     confidence: 'indicative',
-    notes: ['simpledex-only raw integer constant-product simulation', 'read-only; no live execution', 'pattern inspired by also account multi-pool swap activity'],
+    notes: ['simpledex-only raw integer constant-product simulation', 'chain-pool reserves required; read-only; no live execution', 'filters: min notional, min absolute profit, per-hop reserve impact, min raw output'],
   };
 }
 
@@ -148,6 +178,10 @@ export function findSimpleDexCyclesFromPools(pools: SimplePool[], options: Simpl
   const notionals = options.notionals?.length ? options.notionals : DEFAULT_NOTIONALS;
   const maxHops = options.maxHops ?? 4;
   const minProfitPct = options.minProfitPct ?? 0;
+  const minNotional = options.minNotional ?? DEFAULT_MIN_NOTIONAL;
+  const minAbsoluteProfit = options.minAbsoluteProfit ?? DEFAULT_MIN_ABSOLUTE_PROFIT;
+  const maxHopImpactPct = options.maxHopImpactPct ?? DEFAULT_MAX_HOP_IMPACT_PCT;
+  const minHopOutputRaw = options.minHopOutputRaw ?? DEFAULT_MIN_HOP_OUTPUT_RAW;
   const limit = options.limit ?? 20;
   const edges = buildEdges(pools);
   const byInput = new Map<string, DirectedEdge[]>();
@@ -181,8 +215,9 @@ export function findSimpleDexCyclesFromPools(pools: SimplePool[], options: Simpl
   for (const path of paths) {
     const pathKey = path.map(edgeKey).join('>');
     for (const notional of notionals) {
-      const simulated = simulatePath(path, notional, start);
-      if (!simulated || simulated.profitPct < minProfitPct) continue;
+      if (notional < minNotional) continue;
+      const simulated = simulatePath(path, notional, start, { maxHopImpactPct, minHopOutputRaw });
+      if (!simulated || simulated.profitPct < minProfitPct || simulated.profit < minAbsoluteProfit) continue;
       const key = `${pathKey}:${notional}`;
       if (seen.has(key)) continue;
       seen.add(key);

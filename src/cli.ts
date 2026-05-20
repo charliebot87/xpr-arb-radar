@@ -30,6 +30,11 @@ function numberListArg(name: string, fallback: number[]): number[] {
   return parsed.length ? parsed : fallback;
 }
 
+function numberArg(name: string, fallback: number): number {
+  const parsed = Number(arg(name, String(fallback)));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function coverageStatus(enabled: Set<string>, failures: string[]): 'complete' | 'degraded' {
   if (!failures.length) return 'complete';
   for (const venue of enabled) {
@@ -49,7 +54,7 @@ function failureCounts(failures: string[]): Record<string, number> {
 async function main() {
   const command = process.argv[2] ?? 'scan';
   if (command !== 'scan' && command !== 'paper' && command !== 'methods' && command !== 'simpledex-cycles') {
-    console.error('usage: xpr-arb-radar scan|paper|methods|simpledex-cycles [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--notionals=0.01,0.1,1] [--max-hops=4] [--start-symbol=XPR] [--start-contract=eosio.token] [--no-persist] [--json]');
+    console.error('usage: xpr-arb-radar scan|paper|methods|simpledex-cycles [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--notionals=0.01,0.1,1] [--max-hops=4] [--start-symbol=XPR] [--start-contract=eosio.token] [--min-notional=1] [--min-profit=0.1] [--max-hop-impact=5] [--min-hop-output-raw=10] [--no-persist] [--json]');
     process.exit(1);
   }
 
@@ -61,6 +66,10 @@ async function main() {
       notionals: numberListArg('notionals', [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 25]),
       maxHops: Number(arg('max-hops', '4')) || 4,
       minProfitPct: Number.isFinite(minEdge) ? minEdge : 0,
+      minNotional: numberArg('min-notional', 1),
+      minAbsoluteProfit: numberArg('min-profit', 0.1),
+      maxHopImpactPct: numberArg('max-hop-impact', 5),
+      minHopOutputRaw: BigInt(arg('min-hop-output-raw', '10') ?? '10'),
       limit: Number(arg('limit', '20')) || 20,
     });
     if (process.argv.includes('--json')) {
