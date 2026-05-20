@@ -23,6 +23,8 @@ export interface SimpleDexCycleCandidate {
   finalAmount: number;
   profit: number;
   profitPct: number;
+  classification: 'lab_artifact' | 'review_candidate' | 'real_candidate' | 'degraded';
+  maxHopImpactPct: number;
   hops: SimpleDexHop[];
   route: string;
   memoRoute: string;
@@ -53,15 +55,17 @@ export interface SimpleDexCycleOptions {
   minAbsoluteProfit?: number;
   maxHopImpactPct?: number;
   minHopOutputRaw?: bigint;
+  familyLimit?: number;
   limit?: number;
 }
 
-const DEFAULT_NOTIONALS = [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 25];
+const DEFAULT_NOTIONALS = [1, 5, 10, 25, 50, 100];
 const DEFAULT_START = { symbol: 'XPR', contract: 'eosio.token' };
-const DEFAULT_MIN_NOTIONAL = 1;
+const DEFAULT_MIN_NOTIONAL = 50;
 const DEFAULT_MIN_ABSOLUTE_PROFIT = 0.1;
-const DEFAULT_MAX_HOP_IMPACT_PCT = 5;
+const DEFAULT_MAX_HOP_IMPACT_PCT = 2;
 const DEFAULT_MIN_HOP_OUTPUT_RAW = 10n;
+const DEFAULT_FAMILY_LIMIT = 3;
 
 function sameToken(a: TokenRef, b: TokenRef): boolean {
   return tokenKey(a) === tokenKey(b);
@@ -95,6 +99,13 @@ function rawAmount(raw: string | number): bigint | undefined {
     return undefined;
   }
   return undefined;
+}
+
+function classifyCandidate(notional: number, maxHopImpactPct: number): SimpleDexCycleCandidate['classification'] {
+  if (maxHopImpactPct > 2) return 'degraded';
+  if (notional >= 100 && maxHopImpactPct <= 1) return 'real_candidate';
+  if (notional >= 25 && maxHopImpactPct <= 2) return 'review_candidate';
+  return 'lab_artifact';
 }
 
 export function simulateSimpleDexSwapRaw(edge: DirectedEdge, amountInRaw: bigint): bigint | undefined {
@@ -157,6 +168,7 @@ function simulatePath(path: DirectedEdge[], notional: number, start: TokenRef, o
   }
   const profit = amount - notional;
   const profitPct = (profit / notional) * 100;
+  const maxObservedHopImpactPct = Math.max(...hops.map((h) => h.inputImpactPct));
   const poolRoute = hops.map((h) => `${h.poolId}${h.isTokenAIn ? 'A' : 'B'}`).join('>');
   const tokenRoute = [start, ...hops.map((h) => h.output)].map((t) => t.symbol).join('->');
   return {
@@ -165,12 +177,19 @@ function simulatePath(path: DirectedEdge[], notional: number, start: TokenRef, o
     finalAmount: amount,
     profit,
     profitPct,
+    classification: classifyCandidate(notional, maxObservedHopImpactPct),
+    maxHopImpactPct: maxObservedHopImpactPct,
     hops,
     route: `${tokenRoute} via ${poolRoute}`,
     memoRoute: `pools=[${hops.map((h) => h.poolId).join(',')}] isTokenAIns=[${hops.map((h) => h.isTokenAIn).join(',')}]`,
     confidence: 'indicative',
-    notes: ['simpledex-only raw integer constant-product simulation', 'chain-pool reserves required; read-only; no live execution', 'filters: min notional, min absolute profit, per-hop reserve impact, min raw output'],
+    notes: ['simpledex-only raw integer constant-product simulation', 'chain-pool reserves required; read-only; no live execution', 'rank by absolute profit first; headline percent is metadata', 'filters: min notional, min absolute profit, per-hop reserve impact, min raw output, route-family cap'],
   };
+}
+
+function routeFamilyKey(candidate: SimpleDexCycleCandidate): string {
+  const intermediates = candidate.hops.slice(0, -1).map((h) => h.output.symbol).filter((symbol) => symbol !== candidate.start.symbol);
+  return intermediates[0] ?? candidate.route;
 }
 
 export function findSimpleDexCyclesFromPools(pools: SimplePool[], options: SimpleDexCycleOptions = {}): SimpleDexCycleCandidate[] {
@@ -182,6 +201,7 @@ export function findSimpleDexCyclesFromPools(pools: SimplePool[], options: Simpl
   const minAbsoluteProfit = options.minAbsoluteProfit ?? DEFAULT_MIN_ABSOLUTE_PROFIT;
   const maxHopImpactPct = options.maxHopImpactPct ?? DEFAULT_MAX_HOP_IMPACT_PCT;
   const minHopOutputRaw = options.minHopOutputRaw ?? DEFAULT_MIN_HOP_OUTPUT_RAW;
+  const familyLimit = options.familyLimit ?? DEFAULT_FAMILY_LIMIT;
   const limit = options.limit ?? 20;
   const edges = buildEdges(pools);
   const byInput = new Map<string, DirectedEdge[]>();
@@ -224,7 +244,18 @@ export function findSimpleDexCyclesFromPools(pools: SimplePool[], options: Simpl
       out.push(simulated);
     }
   }
-  return out.sort((a, b) => b.profitPct - a.profitPct || b.profit - a.profit).slice(0, limit);
+  const familyCounts = new Map<string, number>();
+  const ranked = out.sort((a, b) => b.profit - a.profit || b.notional - a.notional || b.profitPct - a.profitPct);
+  const diversified: SimpleDexCycleCandidate[] = [];
+  for (const candidate of ranked) {
+    const family = routeFamilyKey(candidate);
+    const count = familyCounts.get(family) ?? 0;
+    if (count >= familyLimit) continue;
+    familyCounts.set(family, count + 1);
+    diversified.push(candidate);
+    if (diversified.length >= limit) break;
+  }
+  return diversified;
 }
 
 export async function findSimpleDexCycles(options: SimpleDexCycleOptions = {}): Promise<SimpleDexCycleCandidate[]> {

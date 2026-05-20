@@ -54,7 +54,7 @@ function failureCounts(failures: string[]): Record<string, number> {
 async function main() {
   const command = process.argv[2] ?? 'scan';
   if (command !== 'scan' && command !== 'paper' && command !== 'methods' && command !== 'simpledex-cycles') {
-    console.error('usage: xpr-arb-radar scan|paper|methods|simpledex-cycles [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--notionals=0.01,0.1,1] [--max-hops=4] [--start-symbol=XPR] [--start-contract=eosio.token] [--min-notional=1] [--min-profit=0.1] [--max-hop-impact=5] [--min-hop-output-raw=10] [--no-persist] [--json]');
+    console.error('usage: xpr-arb-radar scan|paper|methods|simpledex-cycles [--min-edge=1] [--quote=XMD] [--min-confidence=indicative] [--state=state/observations.jsonl] [--scoreboard=/Users/charliebot/clawd/state/mragentsmith-strategy-score.json] [--agent=charliebot] [--notional=10] [--notionals=1,5,10,25,50,100] [--max-hops=4] [--start-symbol=XPR] [--start-contract=eosio.token] [--min-notional=50] [--min-profit=0.1] [--max-hop-impact=2] [--min-hop-output-raw=10] [--family-limit=3] [--no-persist] [--json]');
     process.exit(1);
   }
 
@@ -63,13 +63,14 @@ async function main() {
     const candidates = await findSimpleDexCycles({
       startSymbol: arg('start-symbol', 'XPR'),
       startContract: arg('start-contract', 'eosio.token'),
-      notionals: numberListArg('notionals', [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 25]),
+      notionals: numberListArg('notionals', [1, 5, 10, 25, 50, 100]),
       maxHops: Number(arg('max-hops', '4')) || 4,
       minProfitPct: Number.isFinite(minEdge) ? minEdge : 0,
-      minNotional: numberArg('min-notional', 1),
+      minNotional: numberArg('min-notional', 50),
       minAbsoluteProfit: numberArg('min-profit', 0.1),
-      maxHopImpactPct: numberArg('max-hop-impact', 5),
+      maxHopImpactPct: numberArg('max-hop-impact', 2),
       minHopOutputRaw: BigInt(arg('min-hop-output-raw', '10') ?? '10'),
+      familyLimit: Number(arg('family-limit', '3')) || 3,
       limit: Number(arg('limit', '20')) || 20,
     });
     if (process.argv.includes('--json')) {
@@ -79,7 +80,7 @@ async function main() {
     console.log(`xpr-arb-radar simpledex exact cycle scan | candidates: ${candidates.length}`);
     for (const c of candidates) {
       console.log(`\n${c.route}`);
-      console.log(`  notional ${c.notional} ${c.start.symbol} -> ${c.finalAmount.toFixed(8)} ${c.start.symbol} | profit ${c.profit.toFixed(8)} (${c.profitPct.toFixed(4)}%)`);
+      console.log(`  ${c.classification} | notional ${c.notional} ${c.start.symbol} -> ${c.finalAmount.toFixed(8)} ${c.start.symbol} | profit ${c.profit.toFixed(8)} (${c.profitPct.toFixed(4)}%) | max hop impact ${c.maxHopImpactPct.toFixed(4)}%`);
       console.log(`  ${c.memoRoute}`);
     }
     return;

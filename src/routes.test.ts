@@ -149,7 +149,7 @@ test('simpledex cycle scanner simulates exact multi-pool xpr loops', () => {
     pool(1, 'XPR', 'AAA', 100, 10_000),
     pool(2, 'AAA', 'BBB', 10_000, 10_000),
     pool(3, 'BBB', 'XPR', 10_000, 110),
-  ], { notionals: [1], minProfitPct: 1, minAbsoluteProfit: 0, maxHopImpactPct: 50, maxHops: 3 });
+  ], { notionals: [1], minProfitPct: 1, minNotional: 1, minAbsoluteProfit: 0, maxHopImpactPct: 50, maxHops: 3 });
   assert.ok(candidates.length > 0);
   assert.match(candidates[0].route, /XPR->AAA->BBB->XPR/);
   assert.ok(candidates[0].profitPct > 1);
